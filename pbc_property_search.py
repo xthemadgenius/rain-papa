@@ -2,6 +2,7 @@
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
@@ -306,49 +307,39 @@ def search_palm_beach_properties():
             sqft_input.send_keys("5000")
             print("✓ Entered 5000 in Square Footage minimum field")
         
-        print("Submitting form naturally...")
+        print("✓ Form has been filled out successfully!")
+        print("Current form state:")
         
+        # Debug: Show current form values
         try:
-            # Find the form element and submit it directly
-            form = driver.find_element(By.TAG_NAME, "form")
-            print("Found form element, submitting...")
-            form.submit()
+            if municipality_dropdown:
+                selected_value = municipality_dropdown.get_attribute("value")
+                print(f"  ✓ Municipality: '{selected_value}'")
             
-            print("Form submitted! Waiting for results...")
-            time.sleep(5)
-            
-        except Exception as e:
-            print(f"Form submit failed: {e}")
-            print("Trying to trigger form submission with Enter key...")
-            try:
-                # Try pressing Enter on the square footage input to trigger submission
-                if sqft_input:
-                    from selenium.webdriver.common.keys import Keys
-                    sqft_input.send_keys(Keys.RETURN)
-                    print("Pressed Enter on square footage field")
-                    time.sleep(3)
-                else:
-                    # Try JavaScript form submission
-                    driver.execute_script("document.forms[0].submit();")
-                    print("Used JavaScript to submit first form")
-                    time.sleep(3)
-                    
-            except Exception as e2:
-                print(f"Alternative submission methods failed: {e2}")
-                print("Form may need manual submission or different approach")
+            if sqft_input:
+                input_value = sqft_input.get_attribute("value")
+                print(f"  ✓ Square Footage minimum: '{input_value}'")
+                
+        except Exception as debug_e:
+            print(f"Debug check failed: {debug_e}")
         
-        current_url = driver.current_url
-        print(f"Current URL after submission: {current_url}")
+        print("\n" + "="*60)
+        print("🎯 READY FOR MANUAL SUBMISSION")
+        print("="*60)
+        print("The form has been automatically filled with:")
+        print("  • Commercial property type selected")
+        print("  • Municipality search type selected") 
+        print("  • Palm Beach municipality selected")
+        print("  • 5000 square feet minimum entered")
+        print()
+        print("👆 Please manually click the SEARCH button to submit the form")
+        print("   (This prevents triggering anti-bot protections)")
+        print()
+        print("⏱️  Browser will stay open for 2 minutes...")
+        print("="*60)
         
-        # Check if we got redirected to results
-        if current_url != "https://pbcpao.gov/AdvSearch/RealPropSearch":
-            print("✓ Form appears to have been submitted successfully!")
-            print("✓ Redirected to results page")
-        else:
-            print("? Still on search page - form may not have submitted")
-        
-        print("Keeping browser open for 30 seconds to view results...")
-        time.sleep(30)
+        # Keep browser open for manual submission
+        time.sleep(120)  # 2 minutes for user to manually submit
         
     except Exception as e:
         print(f"An error occurred: {str(e)}")
