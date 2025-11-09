@@ -23,6 +23,11 @@ def search_palm_beach_properties():
     chrome_options = Options()
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    # Enable remote debugging so extractor can connect to this session
+    chrome_options.add_argument("--remote-debugging-port=9222")
+    
+    print("Starting Chrome with remote debugging enabled...")
+    print("This allows the data extractor to connect to this browser session.")
     
     driver = webdriver.Chrome(options=chrome_options)
     
@@ -335,11 +340,28 @@ def search_palm_beach_properties():
         print("👆 Please manually click the SEARCH button to submit the form")
         print("   (This prevents triggering anti-bot protections)")
         print()
-        print("⏱️  Browser will stay open for 2 minutes...")
+        print("⏱️  Browser will stay open indefinitely for data extraction...")
         print("="*60)
         
-        # Keep browser open for manual submission
-        time.sleep(120)  # 2 minutes for user to manually submit
+        print("\nNext steps:")
+        print("1. Manually click the SEARCH button to get results")
+        print("2. Wait for results to load completely")
+        print("3. In another terminal, run: python3 enhanced_property_extractor.py")
+        print("4. The extractor will connect to this browser session")
+        print("\n⚠️  DO NOT close this browser window until extraction is complete!")
+        
+        # Keep browser open indefinitely for data extraction
+        try:
+            while True:
+                response = input("\nType 'quit' to close browser, or press ENTER to keep waiting: ").strip().lower()
+                if response == 'quit':
+                    print("Closing browser...")
+                    break
+                else:
+                    print("Browser staying open for data extraction...")
+                    time.sleep(1)
+        except KeyboardInterrupt:
+            print("\nBrowser will be closed...")
         
     except Exception as e:
         print(f"An error occurred: {str(e)}")
