@@ -29,36 +29,49 @@ import random
 
 @dataclass
 class PropertyRecord:
-    """Enhanced data structure for PAPA property information"""
-    property_address: str = ""
-    owner_name: str = ""
-    mailing_address: str = ""
+    """Enhanced data structure for PAPA property information with required fields"""
+    # Primary identification
+    parcel_number: str = ""  # Required: Parcel Number
+    property_address: str = ""  # Required: Location
+    owner_name: str = ""  # Required: Owner Name
+    
+    # Financial information  
+    sale_price: str = ""  # Required: Sale Price
+    sale_date: str = ""  # Required: Sale Date
     property_value: str = ""
     assessed_value: str = ""
     market_value: str = ""
     taxable_value: str = ""
-    square_footage: str = ""
-    lot_sqft: str = ""
+    
+    # Property details
+    square_footage: str = ""  # Required: Sq. Ft
+    lot_size: str = ""  # Required: Lot Size (renamed from lot_sqft)
+    acres: str = ""  # Required: Acres
+    municipality: str = ""  # Required: Municipality
+    zoning: str = ""  # Required: Zoning
+    
+    # Mailing information
+    mail_address: str = ""  # Required: Mail Address (renamed from mailing_address)
+    mail_city_state_zip: str = ""  # Required: Mail City, State, Zip
+    
+    # Status
+    homesteaded: str = ""  # Required: Homesteaded (renamed from homestead_exemption)
+    
+    # Legacy/additional fields
     property_type: str = ""
     property_use: str = ""
-    parcel_id: str = ""
     account_number: str = ""
     folio_number: str = ""
-    sale_price: str = ""
-    sale_date: str = ""
     deed_book: str = ""
     year_built: str = ""
     bedrooms: str = ""
     bathrooms: str = ""
     half_baths: str = ""
-    municipality: str = ""
     neighborhood: str = ""
     subdivision: str = ""
-    zoning: str = ""
     land_use_code: str = ""
     building_class: str = ""
     tax_amount: str = ""
-    homestead_exemption: str = ""
     exemption_amount: str = ""
     school_district: str = ""
     additional_info: str = ""
@@ -298,7 +311,7 @@ class EnhancedPropertyExtractor:
                 self._extract_papa_patterns(row_text, record)
                 
                 # Only add records with meaningful data
-                if record.property_address or record.owner_name or record.parcel_id:
+                if record.property_address or record.owner_name or record.parcel_number:
                     records.append(record)
                     
                     if self.debug_mode:
@@ -322,14 +335,16 @@ class EnhancedPropertyExtractor:
         papa_field_keywords = {
             'property_address': ['address', 'location', 'street', 'site address', 'property location', 'situs'],
             'owner_name': ['owner', 'name', 'taxpayer', 'owner name', 'taxpayer name'],
-            'mailing_address': ['mailing', 'mail', 'mailing address', 'owner address'],
+            'mail_address': ['mailing', 'mail', 'mailing address', 'owner address'],
+            'mail_city_state_zip': ['mail city', 'mail state', 'mail zip', 'city state zip', 'owner city'],
             'property_value': ['just value', 'market value', 'assessed', 'assessment', 'total value'],
             'assessed_value': ['assessed', 'assessed value', 'assessment'],
             'market_value': ['market', 'market value', 'fair market'],
             'taxable_value': ['taxable', 'taxable value', 'net taxable'],
             'square_footage': ['sqft', 'sq ft', 'square', 'footage', 'building area', 'living area'],
-            'lot_sqft': ['lot', 'land', 'lot size', 'lot sqft', 'land sqft'],
-            'parcel_id': ['parcel', 'pcn', 'parcel id', 'parcel number'],
+            'lot_size': ['lot', 'land', 'lot size', 'lot sqft', 'land sqft', 'lot area'],
+            'acres': ['acres', 'acreage', 'acre'],
+            'parcel_number': ['parcel', 'pcn', 'parcel id', 'parcel number'],
             'account_number': ['account', 'account number', 'acct'],
             'folio_number': ['folio', 'folio number'],
             'sale_price': ['sale', 'sold', 'price', 'sale price', 'last sale'],
@@ -347,7 +362,7 @@ class EnhancedPropertyExtractor:
             'bathrooms': ['bath', 'bathroom', 'ba', 'full bath'],
             'half_baths': ['half bath', 'half', 'powder'],
             'tax_amount': ['tax', 'taxes', 'tax amount', 'annual tax'],
-            'homestead_exemption': ['homestead', 'homestead exempt'],
+            'homesteaded': ['homestead', 'homestead exempt', 'homesteaded'],
             'exemption_amount': ['exempt', 'exemption', 'exempt amount']
         }
         
@@ -390,8 +405,8 @@ class EnhancedPropertyExtractor:
                     record.property_address = match.group(1).strip()
                     break
         
-        # Parcel ID patterns (PAPA format: XX-XXXX-XXX-XXXX)
-        if not record.parcel_id:
+        # Parcel Number patterns (PAPA format: XX-XXXX-XXX-XXXX)
+        if not record.parcel_number:
             parcel_patterns = [
                 r'([0-9]{2}-[0-9]{4}-[0-9]{3}-[0-9]{4})',
                 r'PCN[:\s]*([A-Z0-9\-]+)',
@@ -401,7 +416,7 @@ class EnhancedPropertyExtractor:
             for pattern in parcel_patterns:
                 match = re.search(pattern, text, re.IGNORECASE)
                 if match:
-                    record.parcel_id = match.group(1)
+                    record.parcel_number = match.group(1)
                     break
         
         # Value patterns with proper currency formatting
@@ -422,6 +437,70 @@ class EnhancedPropertyExtractor:
         if not record.municipality:
             if "palm beach" in text.lower():
                 record.municipality = "Palm Beach"
+        
+        # Acres patterns
+        if not record.acres:
+            acres_patterns = [
+                r'([0-9]+\.?[0-9]*) acre[s]?',
+                r'Acres?[:\s]*([0-9]+\.?[0-9]*)',
+                r'([0-9]+\.?[0-9]*) ac'
+            ]
+            
+            for pattern in acres_patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    record.acres = match.group(1)
+                    break
+        
+        # Mail City, State, Zip patterns
+        if not record.mail_city_state_zip:
+            mail_patterns = [
+                r'([A-Z\s]+,\s*[A-Z]{2}\s+[0-9]{5}(?:-[0-9]{4})?)',
+                r'Mail.*?([A-Z\s]+,\s*[A-Z]{2}\s+[0-9]{5})',
+                r'Owner.*?([A-Z\s]+,\s*FL\s+[0-9]{5})'
+            ]
+            
+            for pattern in mail_patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    record.mail_city_state_zip = match.group(1).strip()
+                    break
+        
+        # Homesteaded patterns
+        if not record.homesteaded:
+            homestead_patterns = [
+                r'Homestead[:\s]*(Yes|No|Y|N)',
+                r'Homesteaded[:\s]*(Yes|No|Y|N)',
+                r'(Homestead Exemption)',
+                r'(Yes).*?homestead',
+                r'(No).*?homestead'
+            ]
+            
+            for pattern in homestead_patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    value = match.group(1).upper()
+                    if value in ['YES', 'Y', 'HOMESTEAD EXEMPTION']:
+                        record.homesteaded = 'Yes'
+                    elif value in ['NO', 'N']:
+                        record.homesteaded = 'No'
+                    else:
+                        record.homesteaded = value
+                    break
+        
+        # Lot Size (additional to existing patterns)
+        if not record.lot_size:
+            lot_patterns = [
+                r'Lot Size[:\s]*([0-9,]+)\s*sq\s*ft',
+                r'Land Area[:\s]*([0-9,]+)',
+                r'([0-9,]+)\s*sq\s*ft\s*lot'
+            ]
+            
+            for pattern in lot_patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    record.lot_size = match.group(1)
+                    break
     
     def extract_all_papa_data(self) -> List[PropertyRecord]:
         """Main extraction method for PAPA data"""
@@ -453,7 +532,7 @@ class EnhancedPropertyExtractor:
                 if links:
                     record.record_url = links[0].get_attribute("href") or ""
                 
-                if record.property_address or record.owner_name or record.parcel_id:
+                if record.property_address or record.owner_name or record.parcel_number:
                     all_records.append(record)
                 
                 if idx % 5 == 0:
@@ -504,7 +583,7 @@ class EnhancedPropertyExtractor:
                 
                 self._extract_papa_patterns(block, record)
                 
-                if record.property_address or record.owner_name or record.parcel_id:
+                if record.property_address or record.owner_name or record.parcel_number:
                     records.append(record)
             
             self.logger.info(f"✅ Extracted {len(records)} records from text parsing")
@@ -523,7 +602,7 @@ class EnhancedPropertyExtractor:
             # Create unique key based on multiple fields
             key_parts = [
                 record.property_address.lower().strip(),
-                record.parcel_id.strip(),
+                record.parcel_number.strip(),
                 record.owner_name.lower().strip()
             ]
             key = "|".join(key_parts)
