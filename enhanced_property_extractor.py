@@ -20,6 +20,7 @@ import csv
 import json
 import time
 import re
+import os
 from datetime import datetime
 from typing import List, Dict, Optional
 import logging
@@ -94,7 +95,7 @@ class EnhancedPropertyExtractor:
             level=log_level,
             format='%(asctime)s - %(levelname)s - %(message)s',
             handlers=[
-                logging.FileHandler(f'enhanced_property_extractor_{datetime.now().strftime("%Y%m%d")}.log'),
+                logging.FileHandler(f'extracted/enhanced_property_extractor_{datetime.now().strftime("%Y%m%d")}.log'),
                 logging.StreamHandler()
             ]
         )
@@ -615,9 +616,16 @@ class EnhancedPropertyExtractor:
     
     def export_to_enhanced_csv(self, records: List[PropertyRecord], filename: str = None) -> str:
         """Export to CSV with enhanced formatting"""
+        # Ensure extracted directory exists
+        os.makedirs('extracted', exist_ok=True)
+        
         if not filename:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"palm_beach_properties_enhanced_{timestamp}.csv"
+            filename = f"extracted/palm_beach_properties_enhanced_{timestamp}.csv"
+        else:
+            # Ensure filename includes extracted folder
+            if not filename.startswith('extracted/'):
+                filename = f"extracted/{filename}"
         
         try:
             with open(filename, 'w', newline='', encoding='utf-8-sig') as csvfile:  # UTF-8 BOM for Excel
@@ -625,18 +633,18 @@ class EnhancedPropertyExtractor:
                     self.logger.warning("⚠️  No records to export")
                     return filename
                 
-                # Define field order for better CSV layout
+                # Define field order with required fields first
                 field_order = [
-                    'property_address', 'owner_name', 'mailing_address',
+                    'parcel_number', 'sale_price', 'sale_date', 'owner_name',
+                    'property_address', 'municipality', 'square_footage',
+                    'mail_address', 'mail_city_state_zip', 'homesteaded',
+                    'acres', 'lot_size', 'zoning',
                     'property_value', 'assessed_value', 'market_value', 'taxable_value',
-                    'square_footage', 'lot_sqft', 'year_built',
-                    'bedrooms', 'bathrooms', 'half_baths',
+                    'year_built', 'bedrooms', 'bathrooms', 'half_baths',
                     'property_type', 'property_use', 'building_class',
-                    'parcel_id', 'account_number', 'folio_number',
-                    'sale_price', 'sale_date', 'deed_book',
-                    'municipality', 'neighborhood', 'subdivision', 'zoning',
-                    'land_use_code', 'school_district',
-                    'tax_amount', 'homestead_exemption', 'exemption_amount',
+                    'account_number', 'folio_number', 'deed_book',
+                    'neighborhood', 'subdivision', 'land_use_code', 'school_district',
+                    'tax_amount', 'exemption_amount',
                     'record_url', 'additional_info', 'extraction_date'
                 ]
                 
@@ -646,13 +654,11 @@ class EnhancedPropertyExtractor:
                 friendly_headers = {
                     'property_address': 'Property Address',
                     'owner_name': 'Owner Name',
-                    'mailing_address': 'Mailing Address',
                     'property_value': 'Property Value',
                     'assessed_value': 'Assessed Value',
                     'market_value': 'Market Value',
                     'taxable_value': 'Taxable Value',
                     'square_footage': 'Square Footage',
-                    'lot_sqft': 'Lot Size (SqFt)',
                     'year_built': 'Year Built',
                     'bedrooms': 'Bedrooms',
                     'bathrooms': 'Bathrooms',
@@ -660,7 +666,6 @@ class EnhancedPropertyExtractor:
                     'property_type': 'Property Type',
                     'property_use': 'Property Use',
                     'building_class': 'Building Class',
-                    'parcel_id': 'Parcel ID',
                     'account_number': 'Account Number',
                     'folio_number': 'Folio Number',
                     'sale_price': 'Sale Price',
@@ -673,7 +678,6 @@ class EnhancedPropertyExtractor:
                     'land_use_code': 'Land Use Code',
                     'school_district': 'School District',
                     'tax_amount': 'Tax Amount',
-                    'homestead_exemption': 'Homestead Exemption',
                     'exemption_amount': 'Exemption Amount',
                     'record_url': 'Record URL',
                     'additional_info': 'Additional Info',
@@ -713,7 +717,6 @@ class EnhancedPropertyExtractor:
                 ('Owner Name', record.owner_name),
                 ('Property Value', record.property_value),
                 ('Square Footage', record.square_footage),
-                ('Parcel ID', record.parcel_id),
                 ('Municipality', record.municipality),
                 ('Year Built', record.year_built),
                 ('Sale Price', record.sale_price),
@@ -797,7 +800,7 @@ class EnhancedPropertyExtractor:
             
             # Also export to JSON for backup
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            json_file = f"palm_beach_properties_enhanced_{timestamp}.json"
+            json_file = f"extracted/palm_beach_properties_enhanced_{timestamp}.json"
             with open(json_file, 'w', encoding='utf-8') as f:
                 data = [asdict(record) for record in records]
                 json.dump(data, f, indent=2, ensure_ascii=False)
@@ -806,7 +809,7 @@ class EnhancedPropertyExtractor:
             print(f"📊 Total records extracted: {len(records)}")
             print(f"📁 Enhanced CSV file: {csv_file}")
             print(f"📁 JSON backup file: {json_file}")
-            print(f"📝 Log file: enhanced_property_extractor_{datetime.now().strftime('%Y%m%d')}.log")
+            print(f"📝 Log file: extracted/enhanced_property_extractor_{datetime.now().strftime('%Y%m%d')}.log")
             
             return csv_file
             
