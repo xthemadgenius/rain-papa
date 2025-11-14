@@ -393,6 +393,115 @@ class EnhancedPropertyExtractor:
     def _extract_papa_patterns(self, text: str, record: PropertyRecord):
         """Extract PAPA-specific data patterns from text"""
         
+        # Check for compact format: "$100 2004-11-12 BACON JOHN D & 712 LAKESIDE CIR NORTH PALM BEACH 9068 712 LAKESIDE CIR NORTH PALM BEACH FL 33408 4523 Y QV MAP"
+        # More flexible pattern to handle various formats
+        compact_parts = text.strip().split()
+        if len(compact_parts) >= 10 and compact_parts[0].startswith('$') and re.match(r'\d{4}-\d{2}-\d{2}', compact_parts[1]):
+            try:
+                # Parse the structured data
+                sale_price = compact_parts[0]
+                sale_date = compact_parts[1]
+                
+                # Find the "&" separator to split owner name from address
+                ampersand_idx = -1
+                for i, part in enumerate(compact_parts):
+                    if '&' in part:
+                        ampersand_idx = i
+                        break
+                
+                if ampersand_idx > 2:
+                    # Owner name is from index 2 to ampersand
+                    owner_parts = compact_parts[2:ampersand_idx]
+                    if compact_parts[ampersand_idx] == '&':
+                        owner_name = ' '.join(owner_parts)
+                        address_start = ampersand_idx + 1
+                    else:
+                        # The '&' is part of a word, split it
+                        last_part = compact_parts[ampersand_idx]
+                        owner_parts.append(last_part.split('&')[0])
+                        owner_name = ' '.join(owner_parts)
+                        address_start = ampersand_idx + 1
+                        
+                    # Find street address by looking for address pattern
+                    street_found = False
+                    street_parts = []
+                    remaining_parts = compact_parts[address_start:]
+                    
+                    for i, part in enumerate(remaining_parts):
+                        street_parts.append(part)
+                        if any(street_type in part.upper() for street_type in ['ST', 'AVE', 'RD', 'DR', 'LN', 'CT', 'PL', 'WAY', 'BLVD', 'CIR', 'DRIVE', 'ROAD', 'STREET', 'AVENUE', 'LANE', 'COURT', 'PLACE', 'BOULEVARD', 'CIRCLE']):
+                            street_found = True
+                            property_address = ' '.join(street_parts)
+                            remaining_after_address = remaining_parts[i+1:]
+                            break
+                    
+                    if street_found and len(remaining_after_address) >= 4:
+                        # Parse remaining: MUNICIPALITY SQFT MAIL_ADDRESS CITY_STATE_ZIP ... Y/N
+                        municipality_parts = []
+                        sqft = ""
+                        
+                        # Municipality could be multiple words, look for the first number (sqft)
+                        sqft_idx = -1
+                        for i, part in enumerate(remaining_after_address):
+                            if part.isdigit():
+                                sqft = part
+                                sqft_idx = i
+                                break
+                        
+                        if sqft_idx > 0:
+                            municipality = ' '.join(remaining_after_address[:sqft_idx])
+                            after_sqft = remaining_after_address[sqft_idx+1:]
+                            
+                            # Find mail address (similar to property address)
+                            mail_street_found = False
+                            mail_street_parts = []
+                            
+                            for i, part in enumerate(after_sqft):
+                                mail_street_parts.append(part)
+                                if any(street_type in part.upper() for street_type in ['ST', 'AVE', 'RD', 'DR', 'LN', 'CT', 'PL', 'WAY', 'BLVD', 'CIR', 'DRIVE', 'ROAD', 'STREET', 'AVENUE', 'LANE', 'COURT', 'PLACE', 'BOULEVARD', 'CIRCLE']):
+                                    mail_street_found = True
+                                    mail_address = ' '.join(mail_street_parts)
+                                    remaining_after_mail = after_sqft[i+1:]
+                                    break
+                            
+                            if mail_street_found and len(remaining_after_mail) >= 4:
+                                # Find FL and zipcode
+                                fl_idx = -1
+                                for i, part in enumerate(remaining_after_mail):
+                                    if 'FL' in part.upper():
+                                        fl_idx = i
+                                        break
+                                
+                                if fl_idx >= 0:
+                                    city_parts = remaining_after_mail[:fl_idx+1]
+                                    after_city = remaining_after_mail[fl_idx+1:]
+                                    
+                                    if len(after_city) >= 3:  # At least: zipcode, some_number, Y/N
+                                        zipcode = after_city[0]
+                                        mail_city_state_zip = ' '.join(city_parts) + ' ' + zipcode
+                                        
+                                        # Find Y/N for homestead
+                                        homestead = ""
+                                        for part in after_city[1:]:
+                                            if part in ['Y', 'N']:
+                                                homestead = "Yes" if part == 'Y' else "No"
+                                                break
+                                        
+                                        # Set all the extracted values
+                                        record.sale_price = sale_price
+                                        record.sale_date = sale_date
+                                        record.owner_name = owner_name.strip()
+                                        record.property_address = property_address.strip()
+                                        record.municipality = municipality.strip()
+                                        record.square_footage = sqft
+                                        record.mail_address = mail_address.strip()
+                                        record.mail_city_state_zip = mail_city_state_zip.strip()
+                                        record.homesteaded = homestead
+                                        return
+            except Exception as e:
+                self.logger.debug(f"Error parsing compact format: {e}")
+                # Continue with regular patterns
+        
         # Property address patterns (PAPA specific)
         if not record.property_address:
             address_patterns = [
