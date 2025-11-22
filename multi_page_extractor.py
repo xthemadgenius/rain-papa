@@ -5,7 +5,7 @@ Multi-Page Property Extractor for Palm Beach County Property Appraiser
 This script automatically:
 1. Connects to existing browser session from pbc_property_search.py
 2. Extracts data from current page
-3. Navigates to next page every 45 seconds
+3. Navigates to next page every 22 seconds
 4. Combines all data into one large CSV file
 5. Continues until no more pages are found
 """
@@ -27,24 +27,52 @@ import os
 
 @dataclass
 class PropertyRecord:
-    """Data class for property information"""
-    property_address: str = ""
-    owner_name: str = ""
-    parcel_number: str = ""
+    """Enhanced data structure for PAPA property information with required fields"""
+    # Primary identification
+    parcel_number: str = ""  # Required: Parcel Number
+    property_address: str = ""  # Required: Location
+    owner_name: str = ""  # Required: Owner Name
+    
+    # Financial information  
+    sale_price: str = ""  # Required: Sale Price
+    sale_date: str = ""  # Required: Sale Date
     property_value: str = ""
     assessed_value: str = ""
     market_value: str = ""
-    square_footage: str = ""
+    taxable_value: str = ""
+    
+    # Property details
+    square_footage: str = ""  # Required: Sq. Ft
+    lot_size: str = ""  # Required: Lot Size (renamed from lot_sqft)
+    acres: str = ""  # Required: Acres
+    municipality: str = ""  # Required: Municipality
+    zoning: str = ""  # Required: Zoning
+    
+    # Mailing information
+    mail_address: str = ""  # Required: Mail Address (renamed from mailing_address)
+    mail_city_state_zip: str = ""  # Required: Mail City, State, Zip
+    
+    # Status
+    homesteaded: str = ""  # Required: Homesteaded (renamed from homestead_exemption)
+    
+    # Legacy/additional fields
     property_type: str = ""
-    sale_price: str = ""
-    sale_date: str = ""
+    property_use: str = ""
+    account_number: str = ""
+    folio_number: str = ""
+    deed_book: str = ""
     year_built: str = ""
-    lot_size: str = ""
     bedrooms: str = ""
     bathrooms: str = ""
-    municipality: str = ""
-    zoning: str = ""
+    half_baths: str = ""
+    neighborhood: str = ""
+    subdivision: str = ""
+    land_use_code: str = ""
+    building_class: str = ""
     tax_amount: str = ""
+    exemption_amount: str = ""
+    school_district: str = ""
+    additional_info: str = ""
     record_url: str = ""
     extraction_date: str = ""
     page_number: int = 0
@@ -55,6 +83,8 @@ class MultiPageExtractor:
         self.driver = None
         self.logger = self.setup_logging()
         self.all_records = []
+        self.total_pages = None
+        self.current_page = 1
         
     def setup_logging(self):
         """Setup logging configuration"""
@@ -109,6 +139,143 @@ class MultiPageExtractor:
         except TimeoutException:
             self.logger.warning(f"Page load timeout after {timeout} seconds")
             return False
+
+    def detect_total_pages(self) -> int:
+        """Detect total number of pages from pagination controls"""
+        try:
+            print("🔍 Detecting total number of pages...")
+            
+            # Common pagination patterns to find total pages
+            total_page_patterns = [
+                # "Page 1 of 15" format
+                "//text()[contains(., 'Page') and contains(., 'of')]",
+                "//span[contains(text(), 'of') and contains(text(), 'Page')]",
+                "//div[contains(text(), 'of') and contains(text(), 'Page')]",
+                
+                # "1 of 15" or "1/15" format
+                "//text()[contains(., 'of ') and preceding-sibling::*[contains(., '1')]]",
+                "//*[contains(text(), 'of ') and contains(text(), '/')]",
+                
+                # Last page number in pagination
+                "//*[contains(@class, 'pagination')]//a[last()]",
+                "//*[contains(@class, 'pager')]//a[last()]",
+                "//*[contains(@id, 'pagination')]//a[last()]",
+                
+                # Look for highest numbered page link
+                "//a[contains(@href, 'page') or contains(@href, 'Page')]",
+                "//a[text() and string-length(text()) <= 3 and translate(text(), '0123456789', '') = '']"
+            ]
+            
+            max_pages_found = 0
+            
+            # Try text-based detection first
+            for pattern in total_page_patterns[:5]:
+                try:
+                    elements = self.driver.find_elements(By.XPATH, pattern)
+                    for element in elements:
+                        text = element.text if hasattr(element, 'text') else str(element)
+                        
+                        # Look for "Page X of Y" or "X of Y" patterns
+                        import re
+                        matches = re.findall(r'(?:Page\s+)?(\d+)\s+of\s+(\d+)', text, re.IGNORECASE)
+                        if matches:
+                            total = int(matches[0][1])
+                            current = int(matches[0][0])
+                            print(f"   Found pagination text: '{text}' -> Total pages: {total}")
+                            self.current_page = current
+                            return total
+                            
+                        # Look for "X/Y" format
+                        matches = re.findall(r'(\d+)\s*/\s*(\d+)', text)
+                        if matches:
+                            total = int(matches[0][1])
+                            current = int(matches[0][0])
+                            print(f"   Found pagination text: '{text}' -> Total pages: {total}")
+                            self.current_page = current
+                            return total
+                            
+                except Exception as e:
+                    continue
+            
+            # Try numbered page links detection
+            print("   Trying numbered page links detection...")
+            try:
+                page_links = self.driver.find_elements(By.XPATH, "//a[text() and string-length(text()) <= 3 and translate(text(), '0123456789', '') = '']")
+                page_numbers = []
+                
+                for link in page_links:
+                    try:
+                        page_num = int(link.text.strip())
+                        if 1 <= page_num <= 1000:  # Reasonable range
+                            page_numbers.append(page_num)
+                    except (ValueError, AttributeError):
+                        continue
+                
+                if page_numbers:
+                    max_pages_found = max(page_numbers)
+                    print(f"   Found page numbers: {sorted(set(page_numbers))} -> Max page: {max_pages_found}")
+                    
+            except Exception as e:
+                self.logger.error(f"Error detecting page numbers: {e}")
+            
+            # Try pagination container analysis
+            print("   Trying pagination container analysis...")
+            try:
+                pagination_containers = self.driver.find_elements(By.XPATH, "//*[contains(@class, 'pagination') or contains(@class, 'pager') or contains(@id, 'pagination')]")
+                
+                for container in pagination_containers:
+                    # Look for any numbers in the container
+                    container_text = container.text
+                    numbers = re.findall(r'\b(\d+)\b', container_text)
+                    if numbers:
+                        # Take the largest reasonable number as potential max page
+                        largest_num = max([int(n) for n in numbers if 1 <= int(n) <= 1000])
+                        if largest_num > max_pages_found:
+                            max_pages_found = largest_num
+                            print(f"   Found in pagination container: {container_text} -> Potential max page: {largest_num}")
+                            
+            except Exception as e:
+                self.logger.error(f"Error analyzing pagination containers: {e}")
+            
+            # Final fallback - look for any "next" or "last" indicators
+            if max_pages_found == 0:
+                print("   No specific page count found, will detect dynamically during navigation")
+                return None
+            
+            print(f"✅ Detected total pages: {max_pages_found}")
+            return max_pages_found
+            
+        except Exception as e:
+            self.logger.error(f"Error detecting total pages: {e}")
+            print(f"⚠️ Could not detect total pages: {e}")
+            return None
+
+    def get_current_page_number(self) -> int:
+        """Try to detect current page number from the page"""
+        try:
+            # Look for current page indicators
+            patterns = [
+                "//span[contains(@class, 'current') or contains(@class, 'active')]",
+                "//a[contains(@class, 'current') or contains(@class, 'active')]",
+                "//li[contains(@class, 'current') or contains(@class, 'active')]//a",
+                "//*[contains(@class, 'pagination')]//*[contains(@class, 'current') or contains(@class, 'active')]"
+            ]
+            
+            for pattern in patterns:
+                try:
+                    elements = self.driver.find_elements(By.XPATH, pattern)
+                    for element in elements:
+                        text = element.text.strip()
+                        if text.isdigit() and 1 <= int(text) <= 1000:
+                            return int(text)
+                except:
+                    continue
+                    
+            return self.current_page  # Fallback to tracked page
+            
+        except Exception as e:
+            self.logger.error(f"Error detecting current page: {e}")
+            return self.current_page
 
     def extract_current_page_data(self, page_number: int) -> List[PropertyRecord]:
         """Extract property data from current page"""
@@ -396,12 +563,28 @@ class MultiPageExtractor:
         if not self.connect_to_browser():
             return
         
-        page_number = 1
+        # Detect total pages available
+        self.total_pages = self.detect_total_pages()
+        
+        if self.total_pages:
+            print(f"📊 Total pages detected: {self.total_pages}")
+            actual_max_pages = min(max_pages, self.total_pages)
+        else:
+            print(f"🔍 Page count unknown, will detect during navigation (max {max_pages})")
+            actual_max_pages = max_pages
+        
+        # Get current page number
+        self.current_page = self.get_current_page_number()
+        print(f"📍 Starting from page: {self.current_page}")
+        
+        page_number = self.current_page
         consecutive_empty_pages = 0
         
         try:
-            while page_number <= max_pages:
+            while page_number <= actual_max_pages:
                 print(f"\n📄 Processing Page {page_number}")
+                if self.total_pages:
+                    print(f"    Progress: {page_number}/{self.total_pages} ({(page_number/self.total_pages*100):.1f}%)")
                 print("-" * 40)
                 
                 # Extract data from current page
@@ -420,17 +603,26 @@ class MultiPageExtractor:
                         print("🛑 Found 3 consecutive empty pages. Stopping extraction.")
                         break
                 
+                # Check if we've reached the known total
+                if self.total_pages and page_number >= self.total_pages:
+                    print(f"🏁 Reached final page ({self.total_pages}). Extraction complete.")
+                    break
+                
                 # Try to navigate to next page
                 if not self.navigate_to_next_page(page_number):
                     print(f"🏁 No more pages found. Extraction complete.")
                     break
                 
                 page_number += 1
+                self.current_page = page_number
                 
-                # Wait 45 seconds as requested
-                if page_number <= max_pages:
-                    print(f"⏱️ Waiting 45 seconds before processing page {page_number}...")
-                    time.sleep(45)
+                # Wait 22 seconds as requested
+                if page_number <= actual_max_pages:
+                    if self.total_pages:
+                        print(f"⏱️ Waiting 22 seconds before processing page {page_number}/{self.total_pages}...")
+                    else:
+                        print(f"⏱️ Waiting 22 seconds before processing page {page_number}...")
+                    time.sleep(22)
             
             # Save results
             print(f"\n🎉 Extraction Complete!")
@@ -464,7 +656,7 @@ if __name__ == "__main__":
     print("This script will automatically:")
     print("• Connect to your existing browser session")
     print("• Extract data from all pages")
-    print("• Navigate between pages every 45 seconds")
+    print("• Navigate between pages every 22 seconds")
     print("• Save everything to one CSV file")
     print()
     
