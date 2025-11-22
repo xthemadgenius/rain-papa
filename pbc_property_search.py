@@ -329,26 +329,89 @@ def search_palm_beach_properties():
             print(f"Debug check failed: {debug_e}")
         
         print("\n" + "="*60)
-        print("🎯 READY FOR MANUAL SUBMISSION")
-        print("="*60)
-        print("The form has been automatically filled with:")
-        print("  • Commercial property type selected")
-        print("  • Municipality search type selected") 
-        print("  • Palm Beach municipality selected")
-        print("  • 5000 square feet minimum entered")
-        print()
-        print("👆 Please manually click the SEARCH button to submit the form")
-        print("   (This prevents triggering anti-bot protections)")
-        print()
-        print("⏱️  Browser will stay open indefinitely for data extraction...")
+        print("🎯 SEARCHING FOR SEARCH BUTTON")
         print("="*60)
         
-        print("\nNext steps:")
-        print("1. Manually click the SEARCH button to get results")
-        print("2. Wait for results to load completely")
-        print("3. In another terminal, run: python3 enhanced_property_extractor.py")
-        print("4. The extractor will connect to this browser session")
-        print("\n⚠️  DO NOT close this browser window until extraction is complete!")
+        # Find and click the search/submit button
+        search_button = None
+        print("Looking for Search/Submit button...")
+        
+        try:
+            # Try common search button patterns
+            search_button = wait.until(
+                EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Search') or contains(text(), 'SEARCH')] | //input[@type='submit' and contains(@value, 'Search')]"))
+            )
+            print("Found Search button")
+        except:
+            try:
+                search_button = driver.find_element(By.XPATH, "//input[@type='submit'] | //button[@type='submit']")
+                print("Found Submit button")
+            except:
+                try:
+                    search_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Submit')] | //input[contains(@value, 'Submit')]")
+                    print("Found Submit button by text")
+                except:
+                    # Debug: Show available buttons
+                    print("Available buttons and submit inputs:")
+                    buttons = driver.find_elements(By.TAG_NAME, "button")
+                    submits = driver.find_elements(By.XPATH, "//input[@type='submit']")
+                    
+                    for i, button in enumerate(buttons):
+                        text = button.text.strip()
+                        button_type = button.get_attribute("type") or "button"
+                        onclick = button.get_attribute("onclick") or "no onclick"
+                        print(f"Button {i}: '{text}' type='{button_type}' onclick='{onclick}'")
+                        
+                        # Use the first button that looks like a search/submit button
+                        if not search_button and (
+                            "search" in text.lower() or 
+                            "submit" in text.lower() or 
+                            button_type == "submit" or
+                            "search" in onclick.lower()
+                        ):
+                            search_button = button
+                            print(f"✓ Using button {i} as search button")
+                    
+                    for i, submit in enumerate(submits):
+                        value = submit.get_attribute("value") or "Submit"
+                        print(f"Submit input {i}: value='{value}'")
+                        if not search_button:
+                            search_button = submit
+                            print(f"✓ Using submit input {i} as search button")
+        
+        if search_button:
+            print("Clicking Search button...")
+            time.sleep(1)  # Brief pause before clicking
+            driver.execute_script("arguments[0].click();", search_button)
+            print("✓ Search button clicked!")
+            
+            print("Waiting for search results to load...")
+            time.sleep(5)  # Wait for results to load
+            
+            # Check if we're on a results page
+            try:
+                wait.until(EC.presence_of_element_located((By.XPATH, "//table | //div[contains(@class, 'result')] | //*[contains(text(), 'result')]")))
+                print("✓ Results page loaded successfully!")
+            except:
+                print("⚠️ Results may still be loading or search may have failed")
+            
+            print("\n" + "="*60)
+            print("🎯 SEARCH COMPLETED AUTOMATICALLY")
+            print("="*60)
+            print("✓ Form filled and search executed successfully!")
+            print("✓ Browser ready for data extraction")
+            print("\nNext steps:")
+            print("1. In another terminal, run: python3 enhanced_property_extractor.py")
+            print("2. The extractor will connect to this browser session")
+            print("\n⚠️ DO NOT close this browser window until extraction is complete!")
+            
+        else:
+            print("❌ Could not find Search button!")
+            print("Form has been filled, but you'll need to manually click Search")
+            print("\nNext steps:")
+            print("1. Manually click the SEARCH button to get results")
+            print("2. Wait for results to load completely")
+            print("3. In another terminal, run: python3 enhanced_property_extractor.py")
         
         # Keep browser open indefinitely for data extraction
         try:
