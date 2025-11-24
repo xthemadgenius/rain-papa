@@ -223,9 +223,12 @@ class AutomatedPropertyExtraction:
             return False
 
     def run_headless_extraction(self):
-        """Run multi-page extraction using current headless driver"""
+        """Run multi-page extraction using current headless driver with guaranteed CSV output"""
         print(f"\n📊 Step 3: Running Headless Data Extraction")
         print("-" * 40)
+        
+        extractor = None
+        csv_file = None
         
         try:
             # Import the multi-page extractor and run it with our driver
@@ -256,58 +259,83 @@ class AutomatedPropertyExtraction:
             page_number = extractor.current_page
             consecutive_empty_pages = 0
             
-            while page_number <= actual_max_pages:
-                print(f"\n📄 Processing Page {page_number}")
-                if extractor.total_pages:
-                    print(f"    Progress: {page_number}/{extractor.total_pages} ({(page_number/extractor.total_pages*100):.1f}%)")
-                print("-" * 40)
-                
-                # Extract data from current page
-                page_records = extractor.extract_current_page_data(page_number)
-                
-                if page_records:
-                    extractor.all_records.extend(page_records)
-                    consecutive_empty_pages = 0
-                    print(f"📊 Page {page_number}: {len(page_records)} records")
-                    print(f"📈 Total so far: {len(extractor.all_records)} records")
-                else:
-                    consecutive_empty_pages += 1
-                    print(f"⚠️ Page {page_number}: No data found")
-                    
-                    if consecutive_empty_pages >= 3:
-                        print("🛑 Found 3 consecutive empty pages. Stopping extraction.")
-                        break
-                
-                # Check if we've reached the known total
-                if extractor.total_pages and page_number >= extractor.total_pages:
-                    print(f"🏁 Reached final page ({extractor.total_pages}). Extraction complete.")
-                    break
-                
-                # Try to navigate to next page
-                if not extractor.navigate_to_next_page(page_number):
-                    print(f"🏁 No more pages found. Extraction complete.")
-                    break
-                
-                page_number += 1
-                extractor.current_page = page_number
-                
-                # Wait 8 seconds between pages
-                if page_number <= actual_max_pages:
+            try:
+                while page_number <= actual_max_pages:
+                    print(f"\n📄 Processing Page {page_number}")
                     if extractor.total_pages:
-                        print(f"⏱️ Waiting 8 seconds before processing page {page_number}/{extractor.total_pages}...")
+                        print(f"    Progress: {page_number}/{extractor.total_pages} ({(page_number/extractor.total_pages*100):.1f}%)")
+                    print("-" * 40)
+                    
+                    # Extract data from current page
+                    page_records = extractor.extract_current_page_data(page_number)
+                    
+                    if page_records:
+                        extractor.all_records.extend(page_records)
+                        consecutive_empty_pages = 0
+                        print(f"📊 Page {page_number}: {len(page_records)} records")
+                        print(f"📈 Total so far: {len(extractor.all_records)} records")
+                        
+                        # Save incremental results every 5 pages (backup)
+                        if page_number % 5 == 0:
+                            try:
+                                backup_file = extractor.save_results_to_csv(filename=f"extracted/backup_page_{page_number}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+                                print(f"💾 Incremental backup saved: {backup_file}")
+                            except:
+                                pass  # Don't fail extraction for backup issues
                     else:
-                        print(f"⏱️ Waiting 8 seconds before processing page {page_number}...")
-                    time.sleep(8)
+                        consecutive_empty_pages += 1
+                        print(f"⚠️ Page {page_number}: No data found")
+                        
+                        if consecutive_empty_pages >= 3:
+                            print("🛑 Found 3 consecutive empty pages. Stopping extraction.")
+                            break
+                    
+                    # Check if we've reached the known total
+                    if extractor.total_pages and page_number >= extractor.total_pages:
+                        print(f"🏁 Reached final page ({extractor.total_pages}). Extraction complete.")
+                        break
+                    
+                    # Try to navigate to next page
+                    if not extractor.navigate_to_next_page(page_number):
+                        print(f"🏁 No more pages found. Extraction complete.")
+                        break
+                    
+                    page_number += 1
+                    extractor.current_page = page_number
+                    
+                    # Wait 8 seconds between pages
+                    if page_number <= actual_max_pages:
+                        if extractor.total_pages:
+                            print(f"⏱️ Waiting 8 seconds before processing page {page_number}/{extractor.total_pages}...")
+                        else:
+                            print(f"⏱️ Waiting 8 seconds before processing page {page_number}...")
+                        time.sleep(8)
+                        
+            except KeyboardInterrupt:
+                print(f"\n⏹️ Extraction interrupted by user at page {page_number}")
+                print(f"📊 Partial results: {len(extractor.all_records)} records extracted")
             
-            # Save results
-            print(f"\n🎉 Extraction Complete!")
+            # Always save results (complete or partial)
+            print(f"\n💾 Saving final results...")
             print("=" * 60)
             print(f"📊 Total pages processed: {page_number}")
             print(f"📊 Total records extracted: {len(extractor.all_records)}")
             
             if extractor.all_records:
-                csv_file = extractor.save_results_to_csv()
-                print(f"💾 Results saved to: {csv_file}")
+                csv_file = extractor.save_results_to_csv(filename=f"extracted/property_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+                print(f"✅ Final results saved to: {csv_file}")
+                
+                # Clean up backup files
+                try:
+                    import glob
+                    backup_files = glob.glob("extracted/backup_page_*.csv")
+                    for backup in backup_files:
+                        os.remove(backup)
+                    if backup_files:
+                        print(f"🧹 Cleaned up {len(backup_files)} backup files")
+                except:
+                    pass
+                
                 return True
             else:
                 print("⚠️ No records were extracted")
@@ -318,6 +346,16 @@ class AutomatedPropertyExtraction:
             return False
         except Exception as e:
             print(f"❌ Headless extraction error: {e}")
+            
+            # Still try to save any partial results
+            if extractor and extractor.all_records:
+                try:
+                    print(f"💾 Attempting to save partial results...")
+                    csv_file = extractor.save_results_to_csv(filename=f"extracted/partial_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+                    print(f"✅ Partial results saved to: {csv_file}")
+                except Exception as save_error:
+                    print(f"❌ Could not save partial results: {save_error}")
+            
             return False
 
     def cleanup(self):
