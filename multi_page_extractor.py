@@ -5,7 +5,7 @@ Multi-Page Property Extractor for Palm Beach County Property Appraiser
 This script automatically:
 1. Connects to existing browser session from pbc_property_search.py
 2. Extracts data from current page
-3. Navigates to next page every 22 seconds
+3. Navigates to next page every 8 seconds
 4. Combines all data into one large CSV file
 5. Continues until no more pages are found
 """
@@ -616,13 +616,13 @@ class MultiPageExtractor:
                 page_number += 1
                 self.current_page = page_number
                 
-                # Wait 22 seconds as requested
+                # Wait 8 seconds as requested
                 if page_number <= actual_max_pages:
                     if self.total_pages:
-                        print(f"⏱️ Waiting 22 seconds before processing page {page_number}/{self.total_pages}...")
+                        print(f"⏱️ Waiting 8 seconds before processing page {page_number}/{self.total_pages}...")
                     else:
-                        print(f"⏱️ Waiting 22 seconds before processing page {page_number}...")
-                    time.sleep(22)
+                        print(f"⏱️ Waiting 8 seconds before processing page {page_number}...")
+                    time.sleep(8)
             
             # Save results
             print(f"\n🎉 Extraction Complete!")
@@ -656,7 +656,7 @@ if __name__ == "__main__":
     print("This script will automatically:")
     print("• Connect to your existing browser session")
     print("• Extract data from all pages")
-    print("• Navigate between pages every 22 seconds")
+    print("• Navigate between pages every 8 seconds")
     print("• Save everything to one CSV file")
     print()
     
