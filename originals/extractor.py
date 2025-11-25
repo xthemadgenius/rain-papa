@@ -153,10 +153,9 @@ class EnhancedPropertyExtractor:
                any(indicator in page_title.lower() for indicator in ['search', 'result', 'property']):
                 print("✅ Already connected to what appears to be a search results page!")
                 
-                auto_proceed = input("Proceed with extraction automatically? (y/n): ").lower().strip()
-                if auto_proceed == 'y':
-                    self.natural_delay(1, 2)
-                    return True
+                print("🚀 Proceeding with extraction automatically...")
+                self.natural_delay(1, 2)
+                return True
         except Exception as e:
             self.logger.error(f"Error checking current page: {e}")
         
@@ -166,29 +165,19 @@ class EnhancedPropertyExtractor:
         print("3. Confirm when ready to extract")
         print()
         
-        while True:
-            response = input("Are results loaded and ready to extract? (y/n): ").lower().strip()
+        print("🚀 Automatically proceeding with extraction...")
+        try:
+            current_url = self.driver.current_url
+            page_title = self.driver.title
+            self.logger.info(f"Starting extraction on: {page_title} - {current_url}")
             
-            if response == 'y':
-                try:
-                    current_url = self.driver.current_url
-                    page_title = self.driver.title
-                    self.logger.info(f"Starting extraction on: {page_title} - {current_url}")
+            # Wait for page to be fully loaded
+            self.natural_delay(2, 4)
+            return True
                     
-                    # Wait for page to be fully loaded
-                    self.natural_delay(2, 4)
-                    return True
-                        
-                except Exception as e:
-                    self.logger.error(f"Error checking current page: {e}")
-                    return True
-                    
-            elif response == 'n':
-                print("Please complete your search and return when ready.")
-                print("Make sure to click SEARCH and wait for results to load.")
-                continue
-            else:
-                print("Please enter 'y' or 'n'")
+        except Exception as e:
+            self.logger.error(f"Error checking current page: {e}")
+            return True
     
     def analyze_papa_page_structure(self) -> Dict[str, any]:
         """PAPA-specific page structure analysis"""
@@ -958,9 +947,9 @@ def main():
     print("✅ Excel-compatible UTF-8 encoding")
     print()
     
-    # Ask for debug mode
-    debug_choice = input("Enable debug mode for detailed logging? (y/n): ").lower()
-    debug_mode = debug_choice == 'y'
+    # Enable debug mode by default
+    print("🔍 Debug mode enabled for detailed logging")
+    debug_mode = True
     
     # Create enhanced extractor
     extractor = EnhancedPropertyExtractor(debug_mode=debug_mode)
